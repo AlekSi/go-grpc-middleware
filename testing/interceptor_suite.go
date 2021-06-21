@@ -25,9 +25,6 @@ import (
 
 var (
 	flagTls = flag.Bool("use_tls", true, "whether all gRPC middleware tests should use tls")
-
-	certPEM []byte
-	keyPEM  []byte
 )
 
 // InterceptorTestSuite is a testify/Suite that starts a gRPC PingService server and a client.
@@ -41,8 +38,11 @@ type InterceptorTestSuite struct {
 	serverAddr     string
 	ServerListener net.Listener
 	Server         *grpc.Server
-	clientConn     *grpc.ClientConn
-	Client         pb_testproto.TestServiceClient
+	CertPEM        []byte
+	KeyPEM         []byte
+
+	clientConn *grpc.ClientConn
+	Client     pb_testproto.TestServiceClient
 
 	restartServerWithDelayedStart chan time.Duration
 	serverRunning                 chan bool
@@ -53,11 +53,15 @@ func (s *InterceptorTestSuite) SetupSuite() {
 	s.serverRunning = make(chan bool)
 
 	s.serverAddr = "127.0.0.1:0"
-	var err error
-	certPEM, keyPEM, err = generateCertAndKey([]string{"localhost", "example.com"})
-	if err != nil {
-		s.T().Fatalf("unable to generate test certificate/key: " + err.Error())
+
+	if s.CertPEM != nil && s.KeyPEM != nil {
+		var err error
+		s.CertPEM, s.KeyPEM, err = generateCertAndKey([]string{"localhost", "example.com"})
+		if err != nil {
+			s.T().Fatalf("unable to generate test certificate/key: " + err.Error())
+		}
 	}
+
 	go func() {
 		for {
 			var err error
@@ -68,7 +72,7 @@ func (s *InterceptorTestSuite) SetupSuite() {
 			s.serverAddr = s.ServerListener.Addr().String()
 			require.NoError(s.T(), err, "must be able to allocate a port for serverListener")
 			if *flagTls {
-				cert, err := tls.X509KeyPair(certPEM, keyPEM)
+				cert, err := tls.X509KeyPair(s.CertPEM, s.KeyPEM)
 				if err != nil {
 					s.T().Fatalf("unable to load test TLS certificate: %v", err)
 				}
@@ -115,7 +119,7 @@ func (s *InterceptorTestSuite) NewClient(dialOpts ...grpc.DialOption) pb_testpro
 	newDialOpts := append(dialOpts, grpc.WithBlock())
 	if *flagTls {
 		cp := x509.NewCertPool()
-		if !cp.AppendCertsFromPEM(certPEM) {
+		if !cp.AppendCertsFromPEM(s.CertPEM) {
 			s.T().Fatal("failed to append certificate")
 		}
 		creds := credentials.NewTLS(&tls.Config{ServerName: "localhost", RootCAs: cp})
