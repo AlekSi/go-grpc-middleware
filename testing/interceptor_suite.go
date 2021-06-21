@@ -54,7 +54,7 @@ func (s *InterceptorTestSuite) SetupSuite() {
 
 	s.serverAddr = "127.0.0.1:0"
 
-	if s.CertPEM != nil && s.KeyPEM != nil {
+	if s.CertPEM == nil && s.KeyPEM == nil {
 		var err error
 		s.CertPEM, s.KeyPEM, err = generateCertAndKey([]string{"localhost", "example.com"})
 		if err != nil {
